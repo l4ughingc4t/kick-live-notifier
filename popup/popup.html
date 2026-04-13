@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kick Live Notifier</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --surface: #111111;
+      --surface2: #1a1a1a;
+      --border: #2a2a2a;
+      --kick: #53fc18;
+      --kick-dim: #2d8a0a;
+      --kick-glow: rgba(83, 252, 24, 0.15);
+      --red: #ff4545;
+      --red-glow: rgba(255, 69, 69, 0.15);
+      --text: #f0f0f0;
+      --muted: #666;
+      --muted2: #444;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 340px;
+      min-height: 480px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      overflow: hidden;
+    }
+
+    /* Noise overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .header {
+      position: relative;
+      z-index: 1;
+      padding: 16px 20px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: linear-gradient(180deg, #0f1a0a 0%, var(--bg) 100%);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-icon {
+      width: 28px;
+      height: 28px;
+      background: var(--kick);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 800;
+      color: #000;
+      box-shadow: 0 0 12px var(--kick-glow);
+      flex-shrink: 0;
+    }
+
+    .logo-text {
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text);
+    }
+
+    .logo-text span {
+      color: var(--kick);
+    }
+
+    .check-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s;
+      letter-spacing: 0.05em;
+    }
+
+    .check-btn:hover {
+      border-color: var(--kick-dim);
+      color: var(--kick);
+    }
+
+    .check-btn:active {
+      transform: scale(0.97);
+    }
+
+    .check-btn.loading {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+
+    /* Add section */
+    .add-section {
+      position: relative;
+      z-index: 1;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .input-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .streamer-input {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      padding: 8px 12px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .streamer-input::placeholder {
+      color: var(--muted2);
+    }
+
+    .streamer-input:focus {
+      border-color: var(--kick-dim);
+    }
+
+    .add-btn {
+      background: var(--kick);
+      border: none;
+      color: #000;
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 13px;
+      padding: 8px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+      letter-spacing: 0.02em;
+    }
+
+    .add-btn:hover {
+      background: #6fff30;
+      box-shadow: 0 0 16px var(--kick-glow);
+    }
+
+    .add-btn:active {
+      transform: scale(0.97);
+    }
+
+    .error-msg {
+      font-size: 11px;
+      color: var(--red);
+      margin-top: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      display: none;
+    }
+
+    /* Stats bar */
+    .stats-bar {
+      position: relative;
+      z-index: 1;
+      padding: 8px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    .stat {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .stat-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--muted2);
+    }
+
+    .stat-dot.live {
+      background: var(--kick);
+      box-shadow: 0 0 6px var(--kick);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .stat-count {
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .stat-label {
+      color: var(--muted);
+    }
+
+    .last-checked {
+      margin-left: auto;
+      font-size: 10px;
+      color: var(--muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Streamer list */
+    .list-container {
+      position: relative;
+      z-index: 1;
+      max-height: 280px;
+      overflow-y: auto;
+    }
+
+    .list-container::-webkit-scrollbar {
+      width: 4px;
+    }
+    .list-container::-webkit-scrollbar-track {
+      background: var(--bg);
+    }
+    .list-container::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 2px;
+    }
+
+    .empty-state {
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--muted);
+    }
+
+    .empty-icon {
+      font-size: 32px;
+      margin-bottom: 10px;
+      opacity: 0.3;
+    }
+
+    .empty-text {
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .streamer-item {
+      display: flex;
+      align-items: center;
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s;
+      animation: slideIn 0.2s ease;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(-8px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    .streamer-item:hover {
+      background: var(--surface);
+    }
+
+    .streamer-item:last-child {
+      border-bottom: none;
+    }
+
+    .status-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-right: 12px;
+    }
+
+    .status-indicator.live {
+      background: var(--kick);
+      box-shadow: 0 0 8px var(--kick);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .status-indicator.offline {
+      background: var(--muted2);
+    }
+
+    .status-indicator.unknown {
+      background: var(--muted2);
+      opacity: 0.4;
+    }
+
+    .streamer-name {
+      flex: 1;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .streamer-name a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .streamer-name a:hover {
+      color: var(--kick);
+    }
+
+    .streamer-badge {
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 2px 6px;
+      border-radius: 3px;
+      margin-right: 10px;
+      letter-spacing: 0.05em;
+      font-weight: 500;
+    }
+
+    .streamer-badge.live {
+      background: var(--kick-glow);
+      color: var(--kick);
+      border: 1px solid var(--kick-dim);
+    }
+
+    .streamer-badge.offline {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+
+    .delete-btn {
+      background: none;
+      border: none;
+      color: var(--muted2);
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 4px;
+      transition: all 0.15s;
+      font-size: 14px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .delete-btn:hover {
+      color: var(--red);
+      background: var(--red-glow);
+    }
+
+    /* Footer */
+    .footer {
+      position: relative;
+      z-index: 1;
+      padding: 8px 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .footer-text {
+      font-size: 10px;
+      color: var(--muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .footer-link {
+      font-size: 10px;
+      color: var(--kick-dim);
+      font-family: 'JetBrains Mono', monospace;
+      text-decoration: none;
+    }
+
+    .footer-link:hover {
+      color: var(--kick);
+    }
+
+    /* Spinning animation for check button */
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .spinning {
+      display: inline-block;
+      animation: spin 0.8s linear infinite;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="logo">
+      <div class="logo-icon">K</div>
+      <div class="logo-text"><span>Kick</span> Notifier</div>
+    </div>
+    <button class="check-btn" id="checkBtn">↻ 今すぐ確認</button>
+  </div>
+
+  <div class="add-section">
+    <div class="input-row">
+      <input
+        type="text"
+        class="streamer-input"
+        id="streamerInput"
+        placeholder="配信者名を入力 (例: xqc)"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <button class="add-btn" id="addBtn">追加</button>
+    </div>
+    <div class="error-msg" id="errorMsg"></div>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat">
+      <div class="stat-dot live" id="liveStatDot"></div>
+      <span class="stat-count" id="liveCount">0</span>
+      <span class="stat-label">ライブ中</span>
+    </div>
+    <div class="stat">
+      <div class="stat-dot"></div>
+      <span class="stat-count" id="totalCount">0</span>
+      <span class="stat-label">登録中</span>
+    </div>
+    <div class="last-checked" id="lastChecked">—</div>
+  </div>
+
+  <div class="list-container" id="streamerList">
+    <div class="empty-state" id="emptyState">
+      <div class="empty-icon">📡</div>
+      <div class="empty-text">配信者を追加すると<br/>ライブ開始時に通知が届きます</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <span class="footer-text">1分ごとに自動確認</span>
+    <a href="https://kick.com" target="_blank" class="footer-link">kick.com ↗</a>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
